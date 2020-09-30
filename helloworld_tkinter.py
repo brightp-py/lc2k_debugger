@@ -30,7 +30,7 @@ button =  {
     "Save": tk.Button(frButtons, text = "Save")
 }
 
-r = 1
+r = 0
 for btn in button:
     button[btn].grid(row = r, column = 0, sticky = "ew", padx = 5, pady = 5)
     r += 1
