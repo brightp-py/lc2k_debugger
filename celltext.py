@@ -11,10 +11,16 @@ window.columnconfigure(1, minsize = 500, weight = 1)
 window.columnconfigure(2, minsize = 500, weight = 1)
 window.rowconfigure(0, minsize = 600, weight = 1)
 
+buttonframe = tk.Frame(window, bg = "gray16")
+buttonframe.grid(row = 0, column = 0, sticky = "nsew")
+
 textframe = tk.Frame(window)
 textframe.grid(row = 0, column = 1, sticky = "nsew")
 
-widths = [50, 50, 50, 50, 50, 500]
+displayframe = tk.Frame(window, bg = "gray16")
+displayframe.grid(row = 0, column = 2, sticky = "nsew")
+
+widths = [70, 60, 70, 30, 70, 500]
 for i, w in enumerate(widths):
     textframe.columnconfigure(i, minsize = w, weight = 1)
 
@@ -28,9 +34,6 @@ for r in range(40):
         sec.grid(row = r, column = c, sticky = "nsew")
         line.append(sec)
     lines.append(line)
-
-buttonframe = tk.Frame(window)
-buttonframe.grid(row = 0, column = 0, sticky = "ns")
 
 testb = tk.Button(buttonframe, text = "Test")
 testb.grid(row = 0, column = 0, sticky = "ew", padx = 5, pady = 5)
