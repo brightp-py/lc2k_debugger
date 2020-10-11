@@ -1,5 +1,6 @@
 import tkinter as tk
-import tkinter.font as tfont
+import tkinter.font as tkfont
+from tkinter.filedialog import askopenfilename, asksaveasfilename
 
 OPCODES = {
     "add":   0,
@@ -149,7 +150,112 @@ class Simulator:
         while not self.halted:
             self.runState()
 
+class Screen:
+
+    def __init__(self):
+
+        self.window = tk.Tk()
+        self.window.title("Little Dragon - LC2K Debugger")
+
+        self.FONT = tkfont.Font(self.window, ("Courier New", 12))
+
+        self.IMAGES = {
+            a: tk.PhotoImage(file = f"images/{a}.png") for a in [
+                "playbutton",
+                "openbutton"
+            ]
+        }
+        
+        self.BCOLOR = "gray18"
+
+        self.sim = Simulator()
+
+        self.filename = ""
+        self.initdir = "/"
+
+        # top bar for control buttons
+        self.window.rowconfigure(0, minsize = 50, weight = 0)
+        # main row for content
+        self.window.rowconfigure(1, minsize = 100, weight = 1)
+
+        # far left bar for debug buttons
+        self.window.columnconfigure(0, minsize = 12, weight = 0)
+        # left column for text editing
+        self.window.columnconfigure(1, minsize = 200, weight = 2)
+        # right column for debugging info
+        self.window.columnconfigure(2, minsize = 100, weight = 1)
+
+        self.buildFrames()
+        self.buildTextFrame()
+        self.buildButtonFrame()
+    
+    def runText(self):
+
+        text = self.textEditor.get("1.0", tk.END)
+        self.sim.run(text)
+    
+    def openFile(self):
+
+        fname = askopenfilename(initialdir = self.initdir, title = "Select file",
+                                filetypes = (("LC2K files","*.as"),("all files","*.*")))
+        
+        with open(fname, 'r') as f:
+            ntext = '\n'.join(f.read().split('\n')[:-1])
+            self.textEditor.delete("1.0", tk.END)
+            self.textEditor.insert("1.0", ntext)
+        
+        self.initdir = '/'.join(fname.split('/')[:-1]) + '/'
+
+    def buildFrames(self):
+
+        # top bar for control buttons
+        self.bframe = tk.Frame(self.window, bg = self.BCOLOR)
+        self.bframe.grid(row = 0, column = 0, rowspan = 2, columnspan = 3,
+                         sticky = "nsew")
+        self.bframe.rowconfigure(0, weight = 1)
+        self.bframe.columnconfigure(0, weight = 1)
+        self.bframe.columnconfigure(1, weight = 1)
+
+        # left side for text editing
+        self.tframe = tk.Frame(self.window, bg = "gray10")
+        self.tframe.grid(row = 1, column = 1, sticky = "nsew")
+        self.tframe.rowconfigure(0, weight = 1)
+        self.tframe.columnconfigure(0, weight = 1)
+
+        # right side for debugging info
+        self.dframe = tk.Frame(self.window, bg = "gray14")
+        self.dframe.grid(row = 1, column = 2, sticky = "nsew")
+
+        # far left bar for debug buttons
+        self.sframe = tk.Frame(self.window, bg = "gray14")
+        self.sframe.grid(row = 1, column = 0, sticky = "nsew")
+    
+    def buildButtonFrame(self):
+
+        self.buttons = {}
+
+        self.buttons["play"] = tk.Button(self.bframe, image = self.IMAGES["playbutton"],
+                                         width = 50, height = 50, bg = self.BCOLOR,
+                                         relief = tk.FLAT, activebackground = "gray22",
+                                         command = self.runText)
+        self.buttons["play"].grid(row = 0, column = 1, sticky = "ne")
+
+        self.buttons["open"] = tk.Button(self.bframe, image = self.IMAGES["openbutton"],
+                                         width = 50, height = 50, bg = self.BCOLOR,
+                                         relief = tk.FLAT, activebackground = "gray22",
+                                         command = self.openFile)
+        self.buttons["open"].grid(row = 0, column = 0, sticky = "nw")
+    
+    def buildTextFrame(self):
+
+        self.textEditor = tk.Text(self.tframe, bg = "gray10", font = self.FONT,
+                                  fg = "white", relief = tk.RIDGE,
+                                  insertbackground = "white")
+        self.textEditor.grid(row = 0, column = 0, sticky = "nsew")
+
+    def run(self):
+
+        self.window.mainloop()
+
 if __name__ == "__main__":
-    with open("test.as", 'r') as f:
-        sim = Simulator()
-        sim.run(f.read())
+    Screen().run()
