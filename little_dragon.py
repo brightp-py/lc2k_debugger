@@ -205,6 +205,13 @@ class Screen:
             self.textEditor.insert("1.0", ntext)
         
         self.initdir = '/'.join(fname.split('/')[:-1]) + '/'
+    
+    def createButton(self, imagename, func):
+
+        return tk.Button(self.bframe, image = self.IMAGES[imagename],
+                         width = 50, height = 50, bg = self.BCOLOR,
+                         relief = tk.FLAT, activebackground = "gray22",
+                         command = func)
 
     def buildFrames(self):
 
@@ -221,6 +228,7 @@ class Screen:
         self.tframe.grid(row = 1, column = 1, sticky = "nsew")
         self.tframe.rowconfigure(0, weight = 1)
         self.tframe.columnconfigure(0, weight = 1)
+        self.tframe.columnconfigure(1, weight = 0)
 
         # right side for debugging info
         self.dframe = tk.Frame(self.window, bg = "gray14")
@@ -234,24 +242,42 @@ class Screen:
 
         self.buttons = {}
 
-        self.buttons["play"] = tk.Button(self.bframe, image = self.IMAGES["playbutton"],
-                                         width = 50, height = 50, bg = self.BCOLOR,
-                                         relief = tk.FLAT, activebackground = "gray22",
-                                         command = self.runText)
+        self.buttons["play"] = self.createButton("playbutton", self.runText)
         self.buttons["play"].grid(row = 0, column = 1, sticky = "ne")
 
-        self.buttons["open"] = tk.Button(self.bframe, image = self.IMAGES["openbutton"],
-                                         width = 50, height = 50, bg = self.BCOLOR,
-                                         relief = tk.FLAT, activebackground = "gray22",
-                                         command = self.openFile)
+        self.buttons["open"] = self.createButton("openbutton", self.openFile)
         self.buttons["open"].grid(row = 0, column = 0, sticky = "nw")
     
     def buildTextFrame(self):
 
+        self.scrollY = tk.Scrollbar(self.tframe, jump = 0, bg = "white", bd = 0,
+                                    troughcolor = "gray10",
+                                    activebackground = "gray14")
+        self.scrollY.grid(row = 0, column = 1, sticky = "nsew")
+
         self.textEditor = tk.Text(self.tframe, bg = "gray10", font = self.FONT,
                                   fg = "white", relief = tk.RIDGE,
-                                  insertbackground = "white")
+                                  insertbackground = "white", wrap = tk.NONE,
+                                  yscrollcommand = self.scrollFromText)
+                                #   yscrollcommand = self.scrollY.set)
         self.textEditor.grid(row = 0, column = 0, sticky = "nsew")
+
+        self.scrollY['command'] = self.scrollEditor
+    
+    def getNumLines(self):
+
+        return int(self.textEditor.index('end-1c').split('.')[0])
+    
+    def scrollFromText(self, *a):
+
+        self.scrollY.set(*a)
+        v = self.scrollY.get()[0]
+        self.scrollEditor("moveto", v)
+    
+    def scrollEditor(self, *a):
+
+        n = self.getNumLines()
+        self.textEditor.yview(int(float(a[1]) * n))
 
     def run(self):
 
