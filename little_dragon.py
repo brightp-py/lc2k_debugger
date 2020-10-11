@@ -89,6 +89,8 @@ class Simulator:
                     a2 = self.label[a2]
                     if op == OPCODES["beq"]:
                         a2 -= (i + 1)
+                        if a2 < 0:
+                            a2 += (1 << 16)
                 else:
                     a2 = int(a2)
             
@@ -102,6 +104,9 @@ class Simulator:
         a0 = (line & (7 << 19)) >> 19
         a1 = (line & (7 << 16)) >> 16
         a2 = line & ((1 << 16) - 1)
+
+        if a2 > (1 << 15):
+            a2 -= (1 << 16)
 
         print(self.pc, op, a0, a1, a2)
         
@@ -150,6 +155,33 @@ class Simulator:
         while not self.halted:
             self.runState()
 
+class SideCheck:
+
+    def __init__(self, parent):
+
+        self.img0 = tk.PhotoImage(file = "images/breakoffbutton.png")
+        self.img1 = tk.PhotoImage(file = "images/breakonbutton.png")
+        
+        self.on = False
+
+        self.button = tk.Button(parent, image = self.img0, width = 12,
+                                height = 12, bg = "gray14", relief = tk.FLAT,
+                                activebackground = "gray22", command = self.click)
+
+    def click(self):
+
+        if self.on:
+            self.on = False
+            self.button['image'] = self.img0
+        
+        else:
+            self.on = True
+            self.button['image'] = self.img1
+    
+    def remove(self):
+
+        self.button.grid_remove()
+
 class Screen:
 
     def __init__(self):
@@ -181,13 +213,16 @@ class Screen:
         # far left bar for debug buttons
         self.window.columnconfigure(0, minsize = 12, weight = 0)
         # left column for text editing
-        self.window.columnconfigure(1, minsize = 200, weight = 2)
+        self.window.columnconfigure(1, minsize = 200, weight = 3)
         # right column for debugging info
-        self.window.columnconfigure(2, minsize = 100, weight = 1)
+        self.window.columnconfigure(2, minsize = 100, weight = 2)
 
         self.buildFrames()
         self.buildTextFrame()
         self.buildButtonFrame()
+        self.buildSideFrame()
+
+        self.udSideFrame = 100
     
     def runText(self):
 
@@ -206,10 +241,10 @@ class Screen:
         
         self.initdir = '/'.join(fname.split('/')[:-1]) + '/'
     
-    def createButton(self, imagename, func):
+    def createButton(self, imagename, func, size = 50):
 
         return tk.Button(self.bframe, image = self.IMAGES[imagename],
-                         width = 50, height = 50, bg = self.BCOLOR,
+                         width = size, height = size, bg = self.BCOLOR,
                          relief = tk.FLAT, activebackground = "gray22",
                          command = func)
 
@@ -235,8 +270,14 @@ class Screen:
         self.dframe.grid(row = 1, column = 2, sticky = "nsew")
 
         # far left bar for debug buttons
-        self.sframe = tk.Frame(self.window, bg = "gray14")
-        self.sframe.grid(row = 1, column = 0, sticky = "nsew")
+        self.scanva = tk.Canvas(self.window, cursor = "hand2",
+                                bg = "gray14", relief = tk.FLAT,
+                                highlightthickness = 0,
+                                width = 12, height = 100,
+                                scrollregion = (0, 0, 0, 100))
+        self.scanva.grid(row = 1, column = 0, sticky = "new")
+        self.sframe = tk.Frame(self.scanva, bg = "gray14")
+        self.sframe.grid(row = 0, column = 0, sticky = "nsew")
     
     def buildButtonFrame(self):
 
@@ -252,6 +293,7 @@ class Screen:
 
         self.scrollY = tk.Scrollbar(self.tframe, jump = 0, bg = "white", bd = 0,
                                     troughcolor = "gray10",
+                                    highlightbackground = "white",
                                     activebackground = "gray14")
         self.scrollY.grid(row = 0, column = 1, sticky = "nsew")
 
@@ -263,6 +305,32 @@ class Screen:
         self.textEditor.grid(row = 0, column = 0, sticky = "nsew")
 
         self.scrollY['command'] = self.scrollEditor
+    
+    def buildSideFrame(self):
+
+        self.sidechecks = []
+
+        sc = SideCheck(self.sframe)
+        sc.button.grid(row = 0, column = 0, sticky = "new")
+        self.sidechecks.append(sc)
+    
+    def updateSideFrame(self):
+
+        n = self.getNumLines()
+        l = len(self.sidechecks)
+
+        while l > n:
+            self.sidechecks[-1].remove()
+            del self.sidechecks[-1]
+            l -= 1
+        
+        while l < n:
+            sc = SideCheck(self.sframe)
+            sc.button.grid(row = l, column = 0, sticky = "new")
+            self.sidechecks.append(sc)
+            l += 1
+
+        self.textEditor.after(self.udSideFrame, self.updateSideFrame)
     
     def getNumLines(self):
 
@@ -280,7 +348,8 @@ class Screen:
         self.textEditor.yview(int(float(a[1]) * n))
 
     def run(self):
-
+        
+        self.textEditor.after(self.udSideFrame, self.updateSideFrame)
         self.window.mainloop()
 
 if __name__ == "__main__":
