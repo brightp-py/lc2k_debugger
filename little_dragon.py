@@ -155,32 +155,46 @@ class Simulator:
         while not self.halted:
             self.runState()
 
-class SideCheck:
+class FileText:
 
-    def __init__(self, parent):
+    def __init__(self, text, startingLine):
 
-        self.img0 = tk.PhotoImage(file = "images/breakoffbutton.png")
-        self.img1 = tk.PhotoImage(file = "images/breakonbutton.png")
+        self.text = '\n'.join(l for l in text if '.fill' not in l)
+        self.startingLine = startingLine
+        self.size = len(self.text.split('\n')) - 1
+
+class Interpreter:
+
+    def loadCode(self, text):
+
+        self.files = []
+        self.breaks = []
+        links = {"this": ""}
+        order = ["this"]
+
+        for i, line in enumerate(text.split('\n')[:-1]):
+            if line[0] == "#":
+                code, arg = line.split(' ', 1)
+                if code == "#LINK":
+                    assert(arg[-3:] == ".as")
+                    with open(arg, 'r') as f:
+                        links[arg] = f.read()
+                        order.append(arg)
+                elif code == "#RUN":
+                    assert(arg[-3:] == ".as")
+                    with open(arg, 'r') as f:
+                        links[arg] = f.read()
+                        order.insert(0, arg)
+                elif code == "#BREAK":
+                    self.breaks.append(i)
+            else:
+                links["this"] += line + '\n'
         
-        self.on = False
+        running = 0
 
-        self.button = tk.Button(parent, image = self.img0, width = 12,
-                                height = 12, bg = "gray14", relief = tk.FLAT,
-                                activebackground = "gray22", command = self.click)
-
-    def click(self):
-
-        if self.on:
-            self.on = False
-            self.button['image'] = self.img0
-        
-        else:
-            self.on = True
-            self.button['image'] = self.img1
-    
-    def remove(self):
-
-        self.button.grid_remove()
+        for o in order:
+            self.files.append(FileText(links[o], running))
+            running += self.files[-1].size
 
 class Screen:
 
@@ -210,19 +224,14 @@ class Screen:
         # main row for content
         self.window.rowconfigure(1, minsize = 100, weight = 1)
 
-        # far left bar for debug buttons
-        self.window.columnconfigure(0, minsize = 12, weight = 0)
         # left column for text editing
-        self.window.columnconfigure(1, minsize = 200, weight = 3)
+        self.window.columnconfigure(0, minsize = 200, weight = 3)
         # right column for debugging info
-        self.window.columnconfigure(2, minsize = 100, weight = 2)
+        self.window.columnconfigure(1, minsize = 100, weight = 2)
 
         self.buildFrames()
         self.buildTextFrame()
         self.buildButtonFrame()
-        self.buildSideFrame()
-
-        self.udSideFrame = 100
     
     def runText(self):
 
@@ -232,7 +241,7 @@ class Screen:
     def openFile(self):
 
         fname = askopenfilename(initialdir = self.initdir, title = "Select file",
-                                filetypes = (("LC2K files","*.as"),("all files","*.*")))
+                                filetypes = (("LC2K files",("*.as", "*.asd")),("all files","*.*")))
         
         with open(fname, 'r') as f:
             ntext = '\n'.join(f.read().split('\n')[:-1])
@@ -252,7 +261,7 @@ class Screen:
 
         # top bar for control buttons
         self.bframe = tk.Frame(self.window, bg = self.BCOLOR)
-        self.bframe.grid(row = 0, column = 0, rowspan = 2, columnspan = 3,
+        self.bframe.grid(row = 0, column = 0, rowspan = 2, columnspan = 2,
                          sticky = "nsew")
         self.bframe.rowconfigure(0, weight = 1)
         self.bframe.columnconfigure(0, weight = 1)
@@ -260,24 +269,14 @@ class Screen:
 
         # left side for text editing
         self.tframe = tk.Frame(self.window, bg = "gray10")
-        self.tframe.grid(row = 1, column = 1, sticky = "nsew")
+        self.tframe.grid(row = 1, column = 0, sticky = "nsew")
         self.tframe.rowconfigure(0, weight = 1)
         self.tframe.columnconfigure(0, weight = 1)
         self.tframe.columnconfigure(1, weight = 0)
 
         # right side for debugging info
         self.dframe = tk.Frame(self.window, bg = "gray14")
-        self.dframe.grid(row = 1, column = 2, sticky = "nsew")
-
-        # far left bar for debug buttons
-        self.scanva = tk.Canvas(self.window, cursor = "hand2",
-                                bg = "gray14", relief = tk.FLAT,
-                                highlightthickness = 0,
-                                width = 12, height = 100,
-                                scrollregion = (0, 0, 0, 100))
-        self.scanva.grid(row = 1, column = 0, sticky = "new")
-        self.sframe = tk.Frame(self.scanva, bg = "gray14")
-        self.sframe.grid(row = 0, column = 0, sticky = "nsew")
+        self.dframe.grid(row = 1, column = 1, sticky = "nsew")
     
     def buildButtonFrame(self):
 
@@ -291,65 +290,17 @@ class Screen:
     
     def buildTextFrame(self):
 
-        self.scrollY = tk.Scrollbar(self.tframe, jump = 0, bg = "white", bd = 0,
-                                    troughcolor = "gray10",
-                                    highlightbackground = "white",
-                                    activebackground = "gray14")
-        self.scrollY.grid(row = 0, column = 1, sticky = "nsew")
-
         self.textEditor = tk.Text(self.tframe, bg = "gray10", font = self.FONT,
                                   fg = "white", relief = tk.RIDGE,
-                                  insertbackground = "white", wrap = tk.NONE,
-                                  yscrollcommand = self.scrollFromText)
-                                #   yscrollcommand = self.scrollY.set)
+                                  insertbackground = "white", wrap = tk.NONE)
         self.textEditor.grid(row = 0, column = 0, sticky = "nsew")
-
-        self.scrollY['command'] = self.scrollEditor
-    
-    def buildSideFrame(self):
-
-        self.sidechecks = []
-
-        sc = SideCheck(self.sframe)
-        sc.button.grid(row = 0, column = 0, sticky = "new")
-        self.sidechecks.append(sc)
-    
-    def updateSideFrame(self):
-
-        n = self.getNumLines()
-        l = len(self.sidechecks)
-
-        while l > n:
-            self.sidechecks[-1].remove()
-            del self.sidechecks[-1]
-            l -= 1
-        
-        while l < n:
-            sc = SideCheck(self.sframe)
-            sc.button.grid(row = l, column = 0, sticky = "new")
-            self.sidechecks.append(sc)
-            l += 1
-
-        self.textEditor.after(self.udSideFrame, self.updateSideFrame)
     
     def getNumLines(self):
 
         return int(self.textEditor.index('end-1c').split('.')[0])
-    
-    def scrollFromText(self, *a):
-
-        self.scrollY.set(*a)
-        v = self.scrollY.get()[0]
-        self.scrollEditor("moveto", v)
-    
-    def scrollEditor(self, *a):
-
-        n = self.getNumLines()
-        self.textEditor.yview(int(float(a[1]) * n))
 
     def run(self):
         
-        self.textEditor.after(self.udSideFrame, self.updateSideFrame)
         self.window.mainloop()
 
 if __name__ == "__main__":
