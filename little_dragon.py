@@ -54,6 +54,7 @@ class Simulator:
     
     def getLabels(self, text):
 
+        self.label = {}
         for i, line in enumerate(text.split('\n')[:-1]):
             lab = line.split('\t')[0]
             if lab.isalpha():
@@ -89,10 +90,13 @@ class Simulator:
                     a2 = self.label[a2]
                     if op == OPCODES["beq"]:
                         a2 -= (i + 1)
-                        if a2 < 0:
-                            a2 += (1 << 16)
+                        # if a2 < 0:
+                        #     a2 += (1 << 16)
                 else:
                     a2 = int(a2)
+                
+                if a2 < 0:
+                    a2 += (1 << 16)
             
             total = (op << 23) + (a0 << 19) + (a1 << 16) + a2
             yield total
@@ -159,9 +163,71 @@ class FileText:
 
     def __init__(self, text, startingLine):
 
-        self.text = '\n'.join(l for l in text if '.fill' not in l)
-        self.startingLine = startingLine
-        self.size = len(self.text.split('\n')) - 1
+        self.text = [l for l in text if l.split('\t')[1] != '.fill']
+        self.data = [l for l in text if l.split('\t')[1] == '.fill']
+        self.textStartingLine = startingLine
+        self.dataStartingLine = 0
+        self.textSize = len(self.text)
+        self.dataSize = len(self.data)
+
+    def process(self):
+
+        self.getLabels()
+    
+    def getLabels(self):
+
+        self.label = {}
+
+        for i, line in enumerate(self.text):
+            lab = line.split('\t')[0]
+            if lab.isalpha():
+                self.label[lab] = i + self.textStartingLine
+        
+        for i, line in enumerate(self.data):
+            lab = line.split('\t')[0]
+            if lab.isalpha():
+                self.label[lab] = i + self.dataStartingLine
+    
+    def saveLines(self):
+
+        self.Tlines = []
+
+        for i, line in enumerate(self.text):
+            lab, op = line.split('\t')[0:2]
+            a0, a1, a2 = "", "", ""
+
+            if op in ["add", "nor", "lw", "sw", "beq", "jalr"]:
+                a0, a1 = line.split('\t')[2:4]
+                if op != "jalr":
+                    a2 = line.split('\t')[4]
+
+            if len(lab) > 0 and lab[0].islower():
+                lab = ""
+            
+            if op in ("lw", "sw"):
+                if a2.islower():
+                    a2 = self.label[a2]
+            
+            if op == "beq":
+                if a2.islower():
+                    a2 = self.label[a2] - (self.textStartingLine + i + 1)
+            
+            self.Tlines.append(f"{lab}\t{op}\t{a0}\t{a1}\t{str(a2)}")
+        
+        self.Dlines = []
+
+        for line in self.data:
+            
+            lab = line.split('\t')[0]
+            a2 = line.split('\t')[2]
+
+            if len(lab) > 0 and lab[0].islower():
+                lab = ""
+
+            if a2.islower():
+                a2 = self.label[a2]
+            
+            self.Dlines.append(f"{lab}\t.fill\t{str(a2)}")
 
 class Interpreter:
 
@@ -169,32 +235,43 @@ class Interpreter:
 
         self.files = []
         self.breaks = []
-        links = {"this": ""}
+        links = {"this": []}
         order = ["this"]
 
         for i, line in enumerate(text.split('\n')[:-1]):
             if line[0] == "#":
+                if line == "#BREAK":
+                    self.breaks.append(i)
+                    continue
                 code, arg = line.split(' ', 1)
                 if code == "#LINK":
                     assert(arg[-3:] == ".as")
                     with open(arg, 'r') as f:
-                        links[arg] = f.read()
+                        links[arg] = f.read().split('\n')[:-1]
                         order.append(arg)
                 elif code == "#RUN":
                     assert(arg[-3:] == ".as")
                     with open(arg, 'r') as f:
-                        links[arg] = f.read()
+                        links[arg] = f.read().split('\n')[:-1]
                         order.insert(0, arg)
-                elif code == "#BREAK":
-                    self.breaks.append(i)
             else:
-                links["this"] += line + '\n'
+                links["this"].append(line)
         
         running = 0
 
         for o in order:
             self.files.append(FileText(links[o], running))
-            running += self.files[-1].size
+            running += self.files[-1].textSize
+        
+        for i in range(len(self.files)):
+            self.files[i].dataStartingLine = running
+            self.files[i].getLabels()
+            self.files[i].saveLines()
+            running += self.files[i].dataSize
+        
+        self.program = '\n'.join('\n'.join(f.Tlines) for f in self.files)
+        data = '\n'.join('\n'.join(f.Dlines) for f in self.files)
+        self.program = self.program + '\n' + data + '\n'
 
 class Screen:
 
@@ -215,6 +292,7 @@ class Screen:
         self.BCOLOR = "gray18"
 
         self.sim = Simulator()
+        self.interpreter = Interpreter()
 
         self.filename = ""
         self.initdir = "/"
@@ -236,7 +314,8 @@ class Screen:
     def runText(self):
 
         text = self.textEditor.get("1.0", tk.END)
-        self.sim.run(text)
+        # self.sim.run(text)
+        self.interpreter.loadCode(text)
     
     def openFile(self):
 
