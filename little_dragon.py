@@ -205,11 +205,11 @@ class FileText:
                 lab = ""
             
             if op in ("lw", "sw"):
-                if a2.islower():
+                if a2[0].islower():
                     a2 = self.label[a2]
             
             if op == "beq":
-                if a2.islower():
+                if a2[0].islower():
                     a2 = self.label[a2] - (self.textStartingLine + i + 1)
             
             self.Tlines.append(f"{lab}\t{op}\t{a0}\t{a1}\t{str(a2)}")
@@ -224,14 +224,18 @@ class FileText:
             if len(lab) > 0 and lab[0].islower():
                 lab = ""
 
-            if a2.islower():
+            if a2[0].islower():
                 a2 = self.label[a2]
             
             self.Dlines.append(f"{lab}\t.fill\t{str(a2)}")
 
 class Interpreter:
 
-    def loadCode(self, text):
+    def __init__(self):
+
+        self.sim = Simulator()
+
+    def loadCode(self, text, folder):
 
         self.files = []
         self.breaks = []
@@ -246,14 +250,14 @@ class Interpreter:
                 code, arg = line.split(' ', 1)
                 if code == "#LINK":
                     assert(arg[-3:] == ".as")
-                    with open(arg, 'r') as f:
-                        links[arg] = f.read().split('\n')[:-1]
-                        order.append(arg)
+                    print(f"Linking {arg}")
+                    links[arg] = self.readF(arg, folder).split('\n')[:-1]
+                    order.append(arg)
                 elif code == "#RUN":
                     assert(arg[-3:] == ".as")
-                    with open(arg, 'r') as f:
-                        links[arg] = f.read().split('\n')[:-1]
-                        order.insert(0, arg)
+                    print(f"Running {arg}")
+                    links[arg] = self.readF(arg, folder).split('\n')[:-1]
+                    order.insert(0, arg)
             else:
                 links["this"].append(line)
         
@@ -271,7 +275,26 @@ class Interpreter:
         
         self.program = '\n'.join('\n'.join(f.Tlines) for f in self.files)
         data = '\n'.join('\n'.join(f.Dlines) for f in self.files)
-        self.program = self.program + '\n' + data + '\n'
+        self.program = self.program + '\n' + data + '\nStack\t.fill\t0\n'
+
+        print(self.program)
+    
+    def readF(self, file, folder):
+
+        try:
+            with open(file, 'r') as f:
+                return f.read()
+        except Exception:
+            try:
+                with open(folder + file, 'r') as f:
+                    return f.read()
+            except Exception as e:
+                print(f"Unable to find {file}")
+                raise(e)
+    
+    def run(self):
+
+        self.sim.run(self.program)
 
 class Screen:
 
@@ -291,11 +314,10 @@ class Screen:
         
         self.BCOLOR = "gray18"
 
-        self.sim = Simulator()
         self.interpreter = Interpreter()
 
         self.filename = ""
-        self.initdir = "/"
+        self.initdir = ""
 
         # top bar for control buttons
         self.window.rowconfigure(0, minsize = 50, weight = 0)
@@ -315,7 +337,8 @@ class Screen:
 
         text = self.textEditor.get("1.0", tk.END)
         # self.sim.run(text)
-        self.interpreter.loadCode(text)
+        self.interpreter.loadCode(text, self.initdir)
+        self.interpreter.run()
     
     def openFile(self):
 
@@ -328,6 +351,8 @@ class Screen:
             self.textEditor.insert("1.0", ntext)
         
         self.initdir = '/'.join(fname.split('/')[:-1]) + '/'
+
+        self.window.title(fname)
     
     def createButton(self, imagename, func, size = 50):
 
