@@ -354,6 +354,20 @@ class Screen:
 
         self.window.title(fname)
     
+    def linkFile(self):
+
+        fname = askopenfilename(initialdir = self.initdir, title = "Link file",
+                                filetypes = (("LC2K files","*.as")))
+        
+        self.textEditor.insert('1.0', f"#LINK {fname}\n")
+    
+    def addParent(self):
+
+        fname = askopenfilename(initialdir = self.initdir, title = "Link parent",
+                                filetypes = (("LC2K files","*.as")))
+        
+        self.textEditor.insert('1.0', f"#RUN {fname}\n")
+    
     def createButton(self, imagename, func, size = 50):
 
         return tk.Button(self.bframe, image = self.IMAGES[imagename],
