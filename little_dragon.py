@@ -15,15 +15,6 @@ OPCODES = {
 }
 
 class Simulator:
-
-    def __init__(self):
-
-        self.label = {}
-
-        self.reg = [0, 0, 0, 0, 0, 0, 0, 0]
-        self.mem = []
-        self.stack = []
-        self.pc = 0
     
     def getMem(self, address):
 
@@ -61,6 +52,15 @@ class Simulator:
                 self.label[lab] = i
     
     def saveLines(self, text):
+
+        self.executed = 0
+
+        self.label = {}
+
+        self.reg = [0, 0, 0, 0, 0, 0, 0, 0]
+        self.mem = []
+        self.stack = []
+        self.pc = 0
 
         for i, line in enumerate(text.split('\n')[:-1]):
             # print(line)
@@ -121,7 +121,7 @@ class Simulator:
             self.reg[a2] = self.reg[a0] + self.reg[a1]
         
         elif op == 1:
-            self.reg[a2] = not (self.reg[a0] or self.reg[a1])
+            self.reg[a2] = ~(self.reg[a0] | self.reg[a1])
         
         elif op == 2:
             address = self.reg[a0] + a2
