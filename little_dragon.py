@@ -59,12 +59,11 @@ class Simulator:
             lab = line.split('\t')[0]
             if lab.isalpha():
                 self.label[lab] = i
-        self.label["Stack"] = i + 1
     
     def saveLines(self, text):
 
         for i, line in enumerate(text.split('\n')[:-1]):
-            print(line)
+            # print(line)
             op = line.split('\t')[1]
             a0, a1, a2 = 0, 0, 0
 
@@ -76,7 +75,8 @@ class Simulator:
                     a2 = int(a2)
                 yield a2
                 continue
-
+                
+            # print(op)
             op = OPCODES[op]
 
             if op < 6:
@@ -98,12 +98,15 @@ class Simulator:
                 if a2 < 0:
                     a2 += (1 << 16)
             
+            # print(op)
             total = (op << 23) + (a0 << 19) + (a1 << 16) + a2
             yield total
     
     def runState(self):
-
+        
         line = self.getMem(self.pc)
+
+        # print(line)
         op = (line & (7 << 23)) >> 23
         a0 = (line & (7 << 19)) >> 19
         a1 = (line & (7 << 16)) >> 16
@@ -112,7 +115,7 @@ class Simulator:
         if a2 > (1 << 15):
             a2 -= (1 << 16)
 
-        print(self.pc, op, a0, a1, a2)
+        # print(self.pc, op, a0, a1, a2)
         
         if op == 0:
             self.reg[a2] = self.reg[a0] + self.reg[a1]
@@ -158,6 +161,25 @@ class Simulator:
         self.resetState(reg)
         while not self.halted:
             self.runState()
+    
+    def getState(self):
+
+        toret = ""
+
+        for i, r in enumerate(self.reg):
+            toret += f"r{str(i)} | {str(r)}\n"
+        
+        toret += "\n-- MEM --\n"
+
+        for i, m in enumerate(self.mem):
+            toret += f"{str(i)} | {str(m)}\n"
+
+        toret += "\n-- STACK --\n"
+
+        for i, s in enumerate(self.stack):
+            toret += f"{str(i)} | {str(m)}\n"
+        
+        return toret
 
 class FileText:
 
@@ -180,12 +202,12 @@ class FileText:
 
         for i, line in enumerate(self.text):
             lab = line.split('\t')[0]
-            if lab.isalpha():
+            if len(lab) > 0:
                 self.label[lab] = i + self.textStartingLine
         
         for i, line in enumerate(self.data):
             lab = line.split('\t')[0]
-            if lab.isalpha():
+            if len(lab) > 0:
                 self.label[lab] = i + self.dataStartingLine
     
     def saveLines(self):
@@ -275,7 +297,9 @@ class Interpreter:
         
         self.program = '\n'.join('\n'.join(f.Tlines) for f in self.files)
         data = '\n'.join('\n'.join(f.Dlines) for f in self.files)
-        self.program = self.program + '\n' + data + '\nStack\t.fill\t0\n'
+        if len(data) > 0:
+            self.program += '\n' + data
+        self.program += '\nStack\t.fill\t0\n'
 
         print(self.program)
     
@@ -295,6 +319,10 @@ class Interpreter:
     def run(self):
 
         self.sim.run(self.program)
+    
+    def getState(self):
+
+        return self.sim.getState()
 
 class Screen:
 
@@ -308,7 +336,12 @@ class Screen:
         self.IMAGES = {
             a: tk.PhotoImage(file = f"images/{a}.png") for a in [
                 "playbutton",
-                "openbutton"
+                "openbutton",
+                "linkbutton",
+                "parentbutton",
+                "skipbutton",
+                "nextbutton",
+                "stopbutton"
             ]
         }
         
@@ -325,20 +358,27 @@ class Screen:
         self.window.rowconfigure(1, minsize = 100, weight = 1)
 
         # left column for text editing
-        self.window.columnconfigure(0, minsize = 200, weight = 3)
+        self.window.columnconfigure(0, minsize = 200, weight = 2)
         # right column for debugging info
-        self.window.columnconfigure(1, minsize = 100, weight = 2)
+        self.window.columnconfigure(1, minsize = 100, weight = 1)
 
         self.buildFrames()
         self.buildTextFrame()
         self.buildButtonFrame()
+        self.buildDebugFrame()
     
     def runText(self):
 
-        text = self.textEditor.get("1.0", tk.END)
-        # self.sim.run(text)
-        self.interpreter.loadCode(text, self.initdir)
-        self.interpreter.run()
+        # try:
+            text = self.textEditor.get("1.0", tk.END)
+            # self.sim.run(text)
+            self.interpreter.loadCode(text, self.initdir)
+            self.interpreter.run()
+            self.printToDebugOut(self.interpreter.getState())
+        
+        # except Exception as e:
+        #     print(str(e))
+        #     self.printToDebugOut(str(e))
     
     def openFile(self):
 
@@ -357,23 +397,30 @@ class Screen:
     def linkFile(self):
 
         fname = askopenfilename(initialdir = self.initdir, title = "Link file",
-                                filetypes = (("LC2K files","*.as")))
+                                filetypes = [("LC2K files",("*.as"))])
         
         self.textEditor.insert('1.0', f"#LINK {fname}\n")
     
     def addParent(self):
 
         fname = askopenfilename(initialdir = self.initdir, title = "Link parent",
-                                filetypes = (("LC2K files","*.as")))
+                                filetypes = [("LC2K files",("*.as"))])
         
         self.textEditor.insert('1.0', f"#RUN {fname}\n")
     
-    def createButton(self, imagename, func, size = 50):
+    def createButton(self, imagename, func, frame, size = 50):
 
-        return tk.Button(self.bframe, image = self.IMAGES[imagename],
+        return tk.Button(frame, image = self.IMAGES[imagename],
                          width = size, height = size, bg = self.BCOLOR,
                          relief = tk.FLAT, activebackground = "gray22",
                          command = func)
+    
+    def printToDebugOut(self, text):
+
+        self.debugOut.config(state = tk.NORMAL)
+        self.debugOut.delete("1.0", tk.END)
+        self.debugOut.insert("1.0", text)
+        self.debugOut.config(state = tk.DISABLED)
 
     def buildFrames(self):
 
@@ -382,8 +429,11 @@ class Screen:
         self.bframe.grid(row = 0, column = 0, rowspan = 2, columnspan = 2,
                          sticky = "nsew")
         self.bframe.rowconfigure(0, weight = 1)
-        self.bframe.columnconfigure(0, weight = 1)
-        self.bframe.columnconfigure(1, weight = 1)
+        self.bframe.columnconfigure(0, weight = 0)
+        self.bframe.columnconfigure(1, weight = 0)
+        self.bframe.columnconfigure(2, weight = 0)
+        self.bframe.columnconfigure(3, weight = 1)
+        self.bframe.columnconfigure(4, weight = 0)
 
         # left side for text editing
         self.tframe = tk.Frame(self.window, bg = "gray10")
@@ -395,23 +445,68 @@ class Screen:
         # right side for debugging info
         self.dframe = tk.Frame(self.window, bg = "gray14")
         self.dframe.grid(row = 1, column = 1, sticky = "nsew")
+        self.dframe.rowconfigure(0, weight = 0)
+        self.dframe.rowconfigure(1, weight = 1)
+        self.dframe.columnconfigure(0, weight = 1)
     
     def buildButtonFrame(self):
 
         self.buttons = {}
 
-        self.buttons["play"] = self.createButton("playbutton", self.runText)
-        self.buttons["play"].grid(row = 0, column = 1, sticky = "ne")
+        self.buttons["play"] = self.createButton("playbutton", self.runText, self.bframe)
+        self.buttons["play"].grid(row = 0, column = 4, sticky = "ne")
 
-        self.buttons["open"] = self.createButton("openbutton", self.openFile)
+        self.buttons["open"] = self.createButton("openbutton", self.openFile, self.bframe)
         self.buttons["open"].grid(row = 0, column = 0, sticky = "nw")
+
+        self.buttons["link"] = self.createButton("linkbutton", self.linkFile, self.bframe)
+        self.buttons["link"].grid(row = 0, column = 1, sticky = "nw")
+
+        self.buttons["parent"] = self.createButton("parentbutton", self.addParent, self.bframe)
+        self.buttons["parent"].grid(row = 0, column = 2, sticky = "nw")
     
     def buildTextFrame(self):
+        
+        self.tframe.grid_propagate(False)
 
         self.textEditor = tk.Text(self.tframe, bg = "gray10", font = self.FONT,
                                   fg = "white", relief = tk.RIDGE,
                                   insertbackground = "white", wrap = tk.NONE)
         self.textEditor.grid(row = 0, column = 0, sticky = "nsew")
+    
+    def buildDebugFrame(self):
+
+        self.oframe = tk.Frame(self.dframe, bg = "gray14")
+        self.oframe.grid(row = 1, column = 0, sticky = "nsew")
+        self.oframe.rowconfigure(0, weight = 1)
+        self.oframe.columnconfigure(0, weight = 1)
+
+        self.oframe.grid_propagate(False)
+
+        self.debugOut = tk.Text(self.oframe, bg = "gray14", font = self.FONT,
+                                fg = "white", relief = tk.FLAT, state = tk.NORMAL,
+                                insertbackground = "white")
+        self.debugOut.grid(row = 0, column = 0, sticky = "nsew")
+
+        self.debugOut.insert("1.0", "[Debug information]\n")
+        self.debugOut.config(state = tk.DISABLED)
+
+        self.dbframe = tk.Frame(self.dframe, bg = self.BCOLOR)
+        self.dbframe.grid(row = 0, column = 0, sticky = "nsew")
+
+        self.dbframe.columnconfigure(0, weight = 0)
+        self.dbframe.columnconfigure(1, weight = 1)
+        self.dbframe.columnconfigure(2, weight = 0)
+        self.dbframe.columnconfigure(3, weight = 0)
+
+        self.buttons["stop"] = self.createButton("stopbutton", lambda: 0, self.dbframe)
+        self.buttons["stop"].grid(row = 0, column = 0, sticky = "ne")
+
+        self.buttons["skip"] = self.createButton("skipbutton", lambda: 0, self.dbframe)
+        self.buttons["skip"].grid(row = 0, column = 2, sticky = "nw")
+
+        self.buttons["next"] = self.createButton("nextbutton", lambda: 0, self.dbframe)
+        self.buttons["next"].grid(row = 0, column = 3, sticky = "nw")
     
     def getNumLines(self):
 
